@@ -1,0 +1,1442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>List Inventory & Redial Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --bg-deep:#0A0E12;
+    --bg-panel:#12181D;
+    --bg-panel-2:#1A222A;
+    --bg-cell:#151C22;
+    --border:#232E36;
+    --border-soft:#1B252C;
+    --text-primary:#E9EEF1;
+    --text-secondary:#8CA0AB;
+    --text-dim:#5B6D78;
+    --teal:#2FD6C0;
+    --teal-dim:rgba(47,214,192,0.14);
+    --amber:#F2A93B;
+    --amber-dim:rgba(242,169,59,0.16);
+    --red:#E5573F;
+    --blue:#5B9EE8;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg-deep);color:var(--text-primary);font-family:var(--sans);}
+  body{min-height:100vh;}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:18px 28px;border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg, var(--bg-panel) 0%, var(--bg-deep) 100%);
+    position:sticky;top:0;z-index:50;
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-mark{
+    width:34px;height:34px;border-radius:8px;
+    background:conic-gradient(from 220deg, var(--teal), var(--amber), var(--teal));
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-weight:700;font-size:13px;color:#06110F;
+    flex-shrink:0;
+  }
+  .brand h1{font-size:16px;font-weight:700;margin:0;letter-spacing:.2px;}
+  .brand .sub{font-size:11.5px;color:var(--text-dim);font-family:var(--mono);margin-top:2px;}
+  .topbar-right{display:flex;align-items:center;gap:10px;}
+  .file-chip{
+    display:none;align-items:center;gap:8px;
+    background:var(--bg-panel-2);border:1px solid var(--border);
+    padding:7px 12px;border-radius:7px;font-family:var(--mono);font-size:12px;color:var(--text-secondary);
+  }
+  .file-chip .dot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px var(--teal);}
+  .btn{
+    font-family:var(--sans);font-size:12.5px;font-weight:600;
+    background:var(--bg-panel-2);color:var(--text-primary);
+    border:1px solid var(--border);padding:8px 14px;border-radius:7px;
+    cursor:pointer;transition:all .15s ease;
+  }
+  .btn:hover{border-color:#33424C;background:#20292F;}
+  .btn.primary{background:var(--teal);color:#06120F;border-color:var(--teal);}
+  .btn.primary:hover{background:#3FE5CE;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  /* ---------- Upload screen ---------- */
+  .upload-wrap{
+    min-height:calc(100vh - 76px);
+    display:flex;align-items:center;justify-content:center;
+    padding:40px 20px;
+  }
+  .dropzone{
+    width:100%;max-width:560px;
+    border:1.5px dashed var(--border);
+    border-radius:14px;
+    background:var(--bg-panel);
+    padding:52px 40px;
+    text-align:center;
+    transition:all .18s ease;
+    cursor:pointer;
+    position:relative;
+  }
+  .dropzone.drag{border-color:var(--teal);background:var(--teal-dim);}
+  .dropzone .icon{
+    width:52px;height:52px;margin:0 auto 20px;
+    border-radius:12px;background:var(--bg-panel-2);border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .dropzone h2{font-size:17px;margin:0 0 8px;font-weight:700;}
+  .dropzone p{font-size:13px;color:var(--text-secondary);margin:0 0 26px;line-height:1.6;}
+  .dropzone .hint{font-size:11px;color:var(--text-dim);font-family:var(--mono);margin-top:18px;}
+  #fileInput{display:none;}
+
+  .loading-wrap{display:none;flex-direction:column;align-items:center;gap:16px;}
+  .spinner{
+    width:34px;height:34px;border-radius:50%;
+    border:3px solid var(--border);border-top-color:var(--teal);
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-wrap .msg{font-family:var(--mono);font-size:12.5px;color:var(--text-secondary);}
+  .error-box{
+    display:none;margin-top:18px;padding:12px 14px;border-radius:8px;
+    background:rgba(229,87,63,0.1);border:1px solid rgba(229,87,63,0.35);
+    color:#F19686;font-size:12.5px;text-align:left;font-family:var(--mono);
+  }
+
+  /* ---------- Dashboard ---------- */
+  #dashboard{display:none;padding:22px 28px 60px;}
+
+  .summary-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px;}
+  .card{
+    background:var(--bg-panel);border:1px solid var(--border);border-radius:11px;
+    padding:16px 18px;position:relative;overflow:hidden;
+  }
+  .card::before{
+    content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent,var(--teal));
+  }
+  .card .label{font-size:10.5px;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);font-weight:600;}
+  .card .value{font-family:var(--mono);font-size:26px;font-weight:600;margin-top:8px;color:var(--text-primary);}
+  .card .value.small{font-size:19px;}
+  .card .foot{font-size:11px;color:var(--text-secondary);margin-top:5px;}
+
+  .main-grid{display:grid;grid-template-columns:230px 1fr;gap:16px;align-items:start;}
+
+  .panel{background:var(--bg-panel);border:1px solid var(--border);border-radius:11px;padding:16px;}
+  .panel h3{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:var(--text-dim);margin:0 0 12px;font-weight:700;}
+  .panel h3.spaced{margin-top:20px;}
+
+  .search-input{
+    width:100%;background:var(--bg-panel-2);border:1px solid var(--border);color:var(--text-primary);
+    padding:8px 10px;border-radius:7px;font-family:var(--sans);font-size:12.5px;margin-bottom:16px;
+  }
+  .search-input:focus{outline:none;border-color:var(--teal);}
+
+  .check-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px;color:var(--text-secondary);cursor:pointer;user-select:none;}
+  .check-row input{accent-color:var(--teal);width:14px;height:14px;cursor:pointer;}
+  .check-row .count{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--text-dim);}
+  .check-row:hover{color:var(--text-primary);}
+  .filter-actions{display:flex;gap:8px;margin-top:10px;}
+  .filter-actions button{
+    flex:1;background:none;border:1px solid var(--border);color:var(--text-dim);
+    padding:5px;border-radius:6px;font-size:10.5px;cursor:pointer;font-family:var(--sans);font-weight:600;
+  }
+  .filter-actions button:hover{color:var(--text-primary);border-color:#33424C;}
+
+  .campaign-note{font-size:11.5px;color:var(--text-secondary);font-family:var(--mono);padding:8px 0;border-top:1px solid var(--border-soft);margin-top:12px;}
+
+  /* ---------- Table ---------- */
+  .table-panel{background:var(--bg-panel);border:1px solid var(--border);border-radius:11px;overflow:hidden;}
+  .table-scroll{overflow:auto;max-height:70vh;}
+  table.pivot{border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:12px;min-width:100%;}
+  table.pivot th, table.pivot td{padding:9px 13px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border-soft);}
+  table.pivot thead th{
+    position:sticky;top:0;z-index:10;background:#161D23;color:var(--text-secondary);
+    font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;
+    border-bottom:1px solid var(--border);cursor:pointer;
+  }
+  table.pivot thead th:hover{color:var(--text-primary);}
+  table.pivot thead th.sorted{color:var(--teal);}
+  table.pivot th.col-list, table.pivot td.col-list{
+    position:sticky;left:0;z-index:5;background:#161D23;text-align:left;font-family:var(--sans);font-weight:600;
+    border-right:1px solid var(--border);min-width:200px;
+  }
+  table.pivot td.col-list{background:var(--bg-panel);font-weight:500;color:var(--text-primary);}
+  table.pivot th.col-now, table.pivot td.col-now{border-right:1px solid var(--border-soft);}
+  table.pivot td.col-total{font-weight:700;color:var(--text-primary);border-right:1px solid var(--border);}
+  table.pivot th.col-total{border-right:1px solid var(--border);}
+  table.pivot td.col-next{font-family:var(--sans);font-weight:600;font-size:11.5px;}
+  table.pivot tbody tr:hover td{background:#171F26;}
+  table.pivot tbody tr:hover td.col-list{background:#1B242B;}
+  table.pivot tbody tr:hover td.col-total{background:#171F26;}
+  table.pivot td.cell{color:var(--text-secondary);position:relative;}
+  table.pivot td.cell.hasval{color:var(--text-primary);}
+  table.pivot td.cell .bar{
+    position:absolute;inset:3px 4px;border-radius:3px;z-index:-1;background:var(--amber-dim);
+  }
+  table.pivot td.col-now .bar{background:var(--teal-dim);}
+  tr.total-row td{background:#0F1519 !important;font-weight:700;color:var(--text-primary);border-top:1.5px solid var(--border);border-bottom:none;}
+  tr.total-row td.col-list{background:#0F1519 !important;}
+  .empty-state{padding:60px 20px;text-align:center;color:var(--text-dim);font-family:var(--mono);font-size:12.5px;}
+
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-track{background:var(--bg-panel);}
+  ::-webkit-scrollbar-thumb{background:#2A3640;border-radius:6px;}
+  ::-webkit-scrollbar-thumb:hover{background:#37454F;}
+
+  @media (max-width:900px){
+    .main-grid{grid-template-columns:1fr;}
+    .summary-row{grid-template-columns:repeat(2,1fr);}
+  }
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">LD</div>
+      <div>
+        <h1>List Inventory &amp; Redial Dashboard</h1>
+        <div class="sub" id="brandSub">awaiting Five9 list detail export</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="file-chip" id="fileChip"><span class="dot"></span><span id="fileChipText"></span></div>
+      <button class="btn" id="snapshotBtn" style="display:none;">Export Snapshot</button>
+      <button class="btn" id="publishBtn" style="display:none;">Publish Dashboard</button>
+      <button class="btn" id="exportBtn" style="display:none;">Export CSV</button>
+      <button class="btn primary" id="loadNewBtn" style="display:none;">Load different file</button>
+    </div>
+  </div>
+
+  <div class="upload-wrap" id="uploadWrap">
+    <div class="dropzone" id="dropzone">
+      <div class="loading-wrap" id="loadingWrap">
+        <div class="spinner"></div>
+        <div class="msg" id="loadingMsg">Reading workbook…</div>
+      </div>
+      <div id="dropzoneIdle">
+        <div class="icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#8CA0AB" stroke-width="1.8">
+            <path d="M12 3v12m0-12 4 4m-4-4-4 4"/>
+            <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+          </svg>
+        </div>
+        <h2>Load a Five9 List Details export</h2>
+        <p>Drop the .xlsx or .csv report here, or click to browse.<br>Everything is parsed locally in your browser — nothing is uploaded anywhere.</p>
+        <button class="btn primary" type="button" id="browseBtn">Choose file</button>
+        <div class="hint">expects columns: LIST NAME · STATUS · CONSIDERATION TIME (DATE)</div>
+      </div>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+    </div>
+  </div>
+  <div style="max-width:560px;margin:0 auto;" id="errorWrapOuter"><div class="error-box" id="errorBox"></div></div>
+
+  <div id="dashboard">
+    <div class="summary-row">
+      <div class="card" style="--accent:var(--teal)">
+        <div class="label">Total Records</div>
+        <div class="value" id="cardTotal">0</div>
+        <div class="foot" id="cardTotalFoot">across selected statuses</div>
+      </div>
+      <div class="card" style="--accent:var(--teal)">
+        <div class="label">Available Now</div>
+        <div class="value" id="cardNow">0</div>
+        <div class="foot" id="cardNowFoot">no consideration hold</div>
+      </div>
+      <div class="card" style="--accent:var(--amber)">
+        <div class="label">Next Redial Date</div>
+        <div class="value small" id="cardNext">—</div>
+        <div class="foot" id="cardNextFoot">earliest date with records due</div>
+      </div>
+      <div class="card" style="--accent:var(--blue)">
+        <div class="label">Lists w/ Records</div>
+        <div class="value" id="cardLists">0</div>
+        <div class="foot" id="cardListsFoot">of 0 lists in file</div>
+      </div>
+      <div class="card" style="--accent:var(--red);display:none;" id="cardAttemptsWrap">
+        <div class="label">Avg Dial Attempts</div>
+        <div class="value" id="cardAttempts">0.0</div>
+        <div class="foot" id="cardAttemptsFoot">weighted by record count</div>
+      </div>
+    </div>
+
+    <div class="main-grid">
+      <div class="panel">
+        <h3>Search</h3>
+        <input class="search-input" id="searchInput" placeholder="Filter list name…">
+
+        <h3>Status</h3>
+        <div id="statusFilters"></div>
+        <div class="filter-actions">
+          <button id="statusAll">All</button>
+          <button id="statusNone">None</button>
+        </div>
+
+        <div id="campaignSection" style="display:none;">
+          <h3 class="spaced">Campaign</h3>
+          <div id="campaignFilters"></div>
+        </div>
+        <div class="campaign-note" id="campaignNote" style="display:none;"></div>
+
+        <div id="attemptsSection" style="display:none;">
+          <h3 class="spaced">Dial Attempts</h3>
+          <div id="attemptsFilters"></div>
+          <div class="filter-actions">
+            <button id="attemptsAll">All</button>
+            <button id="attemptsNone">None</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-panel">
+        <div class="table-scroll">
+          <table class="pivot" id="pivotTable">
+            <thead><tr id="pivotHeadRow"></tr></thead>
+            <tbody id="pivotBody"></tbody>
+            <tfoot id="pivotFoot"></tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- State ----------
+  let RAW = null;          // { agg, lists, statuses, campaigns, dateCols, todayKey, headerMap }
+  let selectedStatuses = new Set();
+  let selectedCampaigns = new Set();
+  let selectedAttemptBuckets = new Set();
+  let searchTerm = "";
+  let sortKey = "total";
+  let sortDir = "desc";
+
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- Upload wiring ----------
+  const dropzone = $("dropzone");
+  const fileInput = $("fileInput");
+  const browseBtn = $("browseBtn");
+  const loadNewBtn = $("loadNewBtn");
+  const exportBtn = $("exportBtn");
+  const snapshotBtn = $("snapshotBtn");
+  const publishBtn = $("publishBtn");
+
+  browseBtn.addEventListener("click", (e)=>{ e.stopPropagation(); fileInput.click(); });
+  dropzone.addEventListener("click", ()=> fileInput.click());
+  dropzone.addEventListener("dragover", (e)=>{ e.preventDefault(); dropzone.classList.add("drag"); });
+  dropzone.addEventListener("dragleave", ()=> dropzone.classList.remove("drag"));
+  dropzone.addEventListener("drop", (e)=>{
+    e.preventDefault(); dropzone.classList.remove("drag");
+    if(e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener("change", (e)=>{
+    if(e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+  });
+  loadNewBtn.addEventListener("click", ()=>{
+    $("dashboard").style.display = "none";
+    $("uploadWrap").style.display = "flex";
+    loadNewBtn.style.display = "none";
+    exportBtn.style.display = "none";
+    snapshotBtn.style.display = "none";
+    publishBtn.style.display = "none";
+    $("fileChip").style.display = "none";
+    $("brandSub").textContent = "awaiting Five9 list detail export";
+    fileInput.value = "";
+  });
+
+  // Function declarations below are hoisted, so it's safe to call this now even though
+  // renderShell/render/deserializeRaw/activateDashboardUI are defined later in the file.
+  loadEmbeddedDataIfPresent();
+
+  function showError(msg){
+    const box = $("errorBox");
+    box.textContent = msg;
+    box.style.display = "block";
+  }
+  function clearError(){ $("errorBox").style.display = "none"; }
+  function setLoading(on, msg){
+    $("loadingWrap").style.display = on ? "flex" : "none";
+    $("dropzoneIdle").style.display = on ? "none" : "block";
+    if(msg) $("loadingMsg").textContent = msg;
+  }
+
+  function handleFile(file){
+    clearError();
+    const isCsv = /\.csv$/i.test(file.name);
+    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+    if(!isCsv && !isExcel){
+      showError("That doesn't look like an Excel or CSV file (.xlsx/.xls/.csv). Please choose the Five9 export.");
+      return;
+    }
+
+    if(isCsv && typeof file.stream === "function"){
+      // Stream large CSVs line-by-line instead of loading the whole file into memory.
+      setLoading(true, "Reading CSV…");
+      setTimeout(()=>{
+        parseCsvStreaming(file).catch(err=>{
+          console.error(err);
+          setLoading(false);
+          showError("Something went wrong parsing this file: " + (err && err.message ? err.message : err));
+        });
+      }, 30);
+      return;
+    }
+
+    setLoading(true, isCsv ? "Reading CSV…" : "Reading workbook…");
+    const reader = new FileReader();
+    reader.onerror = ()=>{ setLoading(false); showError("Couldn't read that file — please try again."); };
+    reader.onload = (e)=>{
+      setTimeout(()=>{
+        try{
+          parseWorkbook(e.target.result, file.name, isCsv ? "string" : "array");
+        }catch(err){
+          console.error(err);
+          setLoading(false);
+          showError("Something went wrong parsing this file: " + (err && err.message ? err.message : err));
+        }
+      }, 30);
+    };
+    if(isCsv) reader.readAsText(file); else reader.readAsArrayBuffer(file);
+  }
+
+  // ---------- Parsing ----------
+  function normHeader(h){
+    return String(h==null?"":h).trim().toLowerCase();
+  }
+
+  function findDataSheet(wb){
+    let best = null;
+    for(const name of wb.SheetNames){
+      const ws = wb.Sheets[name];
+      if(!ws || !ws["!ref"]) continue;
+      const range = XLSX.utils.decode_range(ws["!ref"]);
+      const headRange = { s:{r:0,c:0}, e:{r:0, c:Math.min(range.e.c, 60)} };
+      let headerRow;
+      try{
+        headerRow = XLSX.utils.sheet_to_json(ws, {header:1, range: headRange, defval:null})[0] || [];
+      }catch(err){ continue; }
+      const norm = headerRow.map(normHeader);
+      const hasListName = norm.includes("list name");
+      const hasConsideration = norm.some(h => h.indexOf("consideration") === 0 || h.indexOf("consideration time") !== -1);
+      if(hasListName && hasConsideration){
+        const rowCount = range.e.r - range.s.r;
+        if(!best || rowCount > best.rowCount){
+          best = { name, ws, rowCount };
+        }
+      }
+    }
+    return best;
+  }
+
+  function colIndex(norm, ...candidates){
+    for(const c of candidates){
+      const idx = norm.indexOf(c);
+      if(idx !== -1) return idx;
+    }
+    return -1;
+  }
+
+  function dateKey(d){
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+  function fmtShort(d){
+    return d.toLocaleDateString("en-US", {month:"short", day:"numeric"});
+  }
+  function fmtLong(d){
+    return d.toLocaleDateString("en-US", {weekday:"short", month:"short", day:"numeric", year:"numeric"});
+  }
+  function startOfWeek(d){
+    const nd = new Date(d);
+    const day = nd.getDay();
+    nd.setDate(nd.getDate() - day);
+    nd.setHours(0,0,0,0);
+    return nd;
+  }
+
+  // ---------- Shared aggregation context ----------
+  function newAggContext(){
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    return {
+      agg: new Map(),          // list -> bucketKey -> "status\u0001campaign\u0001attemptsBucket" -> {count, attemptsSum}
+      lists: new Set(),
+      statuses: new Set(),
+      campaigns: new Set(),
+      attemptBuckets: new Set(),
+      hasAttemptsData: false,
+      futureDateSet: new Set(),
+      totalRows: 0,
+      today
+    };
+  }
+
+  function attemptsBucket(n){
+    if(n >= 5) return "5+";
+    return String(n);
+  }
+  const ATTEMPT_BUCKET_ORDER = ["0","1","2","3","4","5+"];
+
+  function aggregateRow(row, idx, ctx){
+    const list = row[idx.iList];
+    if(list == null || list === "") return;
+    ctx.totalRows++;
+
+    const status = idx.iStatus !== -1 ? (row[idx.iStatus] == null || row[idx.iStatus] === "" ? "(blank)" : String(row[idx.iStatus])) : "(all)";
+    const campaign = idx.iCampaign !== -1 ? (row[idx.iCampaign] == null || row[idx.iCampaign] === "" ? "(blank)" : String(row[idx.iCampaign])) : null;
+    const rawCount = idx.iCount !== -1 ? row[idx.iCount] : null;
+    const cnt = typeof rawCount === "number" ? rawCount : (typeof rawCount === "string" && rawCount.trim() !== "" && !isNaN(Number(rawCount)) ? Number(rawCount) : 1);
+    const rawDate = row[idx.iConsider];
+
+    let attempts = 0;
+    let hasAttempts = false;
+    if(idx.iAttempts !== -1){
+      const rawAttempts = row[idx.iAttempts];
+      const n = typeof rawAttempts === "number" ? rawAttempts : (typeof rawAttempts === "string" && rawAttempts.trim() !== "" ? Number(rawAttempts) : NaN);
+      if(!isNaN(n)){ attempts = n; hasAttempts = true; }
+    }
+    const attBucket = hasAttempts ? attemptsBucket(attempts) : "0";
+    if(hasAttempts) ctx.hasAttemptsData = true;
+
+    ctx.lists.add(list);
+    ctx.statuses.add(status);
+    if(campaign != null) ctx.campaigns.add(campaign);
+    ctx.attemptBuckets.add(attBucket);
+
+    let bucket;
+    let d = null;
+    if(rawDate instanceof Date && !isNaN(rawDate)){
+      d = new Date(rawDate.getFullYear(), rawDate.getMonth(), rawDate.getDate());
+    } else if(typeof rawDate === "number"){
+      // excel serial fallback (rare from CSV, but harmless to keep)
+      const parsed = XLSX.SSF ? XLSX.SSF.parse_date_code(rawDate) : null;
+      if(parsed) d = new Date(parsed.y, parsed.m-1, parsed.d);
+    } else if(typeof rawDate === "string" && rawDate.trim() !== ""){
+      // CSV exports carry dates as plain text, e.g. "Wed, 1 Jul 2026 08:58:41" or "8/11/2026"
+      const parsedStr = new Date(rawDate.trim());
+      if(!isNaN(parsedStr)){
+        d = new Date(parsedStr.getFullYear(), parsedStr.getMonth(), parsedStr.getDate());
+      }
+    }
+
+    if(d === null || d <= ctx.today){
+      bucket = "now";
+    } else {
+      bucket = dateKey(d);
+      ctx.futureDateSet.add(bucket);
+    }
+
+    const cellKey = status + "\u0001" + (campaign == null ? "" : campaign) + "\u0001" + attBucket;
+    if(!ctx.agg.has(list)) ctx.agg.set(list, new Map());
+    const listMap = ctx.agg.get(list);
+    if(!listMap.has(bucket)) listMap.set(bucket, new Map());
+    const bucketMap = listMap.get(bucket);
+    const existing = bucketMap.get(cellKey);
+    if(existing){
+      existing.count += cnt;
+      existing.attemptsSum += cnt * attempts;
+    } else {
+      bucketMap.set(cellKey, { count: cnt, attemptsSum: cnt * attempts });
+    }
+  }
+
+  function finalizeAggregation(ctx, fileName){
+    // Build sorted future date columns; if too many distinct days, roll up into weeks.
+    let futureDates = Array.from(ctx.futureDateSet).sort();
+    let dateCols = []; // { key, label, tooltip, isWeek }
+    const agg = ctx.agg;
+
+    if(futureDates.length > 45){
+      const weekAgg = new Map();
+      const weekKeySet = new Set();
+      const remap = new Map();
+      futureDates.forEach(dk=>{
+        const [y,m,d] = dk.split("-").map(Number);
+        const dt = new Date(y, m-1, d);
+        const wk = startOfWeek(dt);
+        const wkKey = dateKey(wk);
+        remap.set(dk, wkKey);
+        weekKeySet.add(wkKey);
+      });
+      for(const [list, listMap] of agg.entries()){
+        const newListMap = new Map();
+        for(const [bucket, statusMap] of listMap.entries()){
+          const newBucket = bucket === "now" ? "now" : (remap.get(bucket) || bucket);
+          if(!newListMap.has(newBucket)) newListMap.set(newBucket, new Map());
+          const targetMap = newListMap.get(newBucket);
+          for(const [st, c] of statusMap.entries()){
+            const acc = targetMap.get(st);
+            if(acc){ acc.count += c.count; acc.attemptsSum += c.attemptsSum; }
+            else targetMap.set(st, { count: c.count, attemptsSum: c.attemptsSum });
+          }
+        }
+        weekAgg.set(list, newListMap);
+      }
+      agg.clear();
+      for(const [k,v] of weekAgg.entries()) agg.set(k,v);
+
+      dateCols = Array.from(weekKeySet).sort().map(wk=>{
+        const [y,m,d] = wk.split("-").map(Number);
+        const start = new Date(y,m-1,d);
+        const end = new Date(start); end.setDate(end.getDate()+6);
+        return { key: wk, label: fmtShort(start) + "–" + fmtShort(end), tooltip: "Week of " + fmtLong(start), isWeek:true, sortDate:start };
+      });
+    } else {
+      dateCols = futureDates.map(dk=>{
+        const [y,m,d] = dk.split("-").map(Number);
+        const dt = new Date(y,m-1,d);
+        return { key: dk, label: fmtShort(dt), tooltip: fmtLong(dt), isWeek:false, sortDate:dt };
+      });
+    }
+
+    RAW = {
+      agg, lists: Array.from(ctx.lists).sort(), statuses: Array.from(ctx.statuses).sort(),
+      campaigns: Array.from(ctx.campaigns).sort(),
+      attemptBuckets: ATTEMPT_BUCKET_ORDER.filter(b => ctx.attemptBuckets.has(b)),
+      hasAttemptsData: ctx.hasAttemptsData,
+      dateCols, fileName, totalRows: ctx.totalRows
+    };
+    selectedStatuses = new Set(RAW.statuses);
+    selectedCampaigns = new Set(RAW.campaigns);
+    selectedAttemptBuckets = new Set(RAW.attemptBuckets);
+
+    renderShell();
+    render();
+    activateDashboardUI(fileName, ctx.totalRows, RAW.lists.length, RAW.dateCols);
+  }
+
+  function activateDashboardUI(fileName, totalRows, listCount, dateCols){
+    setLoading(false);
+    $("uploadWrap").style.display = "none";
+    $("dashboard").style.display = "block";
+    loadNewBtn.style.display = "inline-block";
+    exportBtn.style.display = "inline-block";
+    snapshotBtn.style.display = "inline-block";
+    publishBtn.style.display = "inline-block";
+    const chip = $("fileChip");
+    chip.style.display = "inline-flex";
+    $("fileChipText").textContent = fileName + " · " + totalRows.toLocaleString() + " records";
+    $("brandSub").textContent = listCount + " lists · " + dateCols.length + " redial " + (dateCols[0] && dateCols[0].isWeek ? "weeks" : "dates") + " loaded";
+  }
+
+  // ---------- Publish: serialize/deserialize aggregated (PII-free) data for baking into a static page ----------
+  function serializeRaw(raw){
+    return {
+      lists: raw.lists,
+      statuses: raw.statuses,
+      campaigns: raw.campaigns,
+      attemptBuckets: raw.attemptBuckets,
+      hasAttemptsData: raw.hasAttemptsData,
+      fileName: raw.fileName,
+      totalRows: raw.totalRows,
+      publishedAt: new Date().toISOString(),
+      dateCols: raw.dateCols.map(c=>({ key:c.key, label:c.label, tooltip:c.tooltip, isWeek:!!c.isWeek, sortDate:c.sortDate.toISOString() })),
+      agg: Array.from(raw.agg.entries()).map(([list, listMap])=>[
+        list,
+        Array.from(listMap.entries()).map(([bucket, bucketMap])=>[
+          bucket,
+          Array.from(bucketMap.entries()).map(([cellKey, cell])=>[cellKey, cell.count, cell.attemptsSum])
+        ])
+      ])
+    };
+  }
+
+  function deserializeRaw(obj){
+    const agg = new Map();
+    obj.agg.forEach(([list, listEntries])=>{
+      const listMap = new Map();
+      listEntries.forEach(([bucket, cellEntries])=>{
+        const bucketMap = new Map();
+        cellEntries.forEach(([cellKey, count, attemptsSum])=>{
+          bucketMap.set(cellKey, { count, attemptsSum });
+        });
+        listMap.set(bucket, bucketMap);
+      });
+      agg.set(list, listMap);
+    });
+    const dateCols = obj.dateCols.map(c=>({ key:c.key, label:c.label, tooltip:c.tooltip, isWeek:c.isWeek, sortDate:new Date(c.sortDate) }));
+    return {
+      agg, lists: obj.lists, statuses: obj.statuses, campaigns: obj.campaigns,
+      attemptBuckets: obj.attemptBuckets, hasAttemptsData: obj.hasAttemptsData,
+      dateCols, fileName: obj.fileName, totalRows: obj.totalRows, publishedAt: obj.publishedAt
+    };
+  }
+
+  async function publishDashboard(){
+    if(!RAW) return;
+    const origLabel = publishBtn.textContent;
+    publishBtn.disabled = true;
+    publishBtn.textContent = "Building…";
+    try{
+      const res = await fetch(location.href, {cache:"no-store"});
+      if(!res.ok) throw new Error("HTTP " + res.status + " fetching this page's own source.");
+      let html = await res.text();
+
+      // If this copy was itself published (has embedded data already), strip it so we don't nest old data.
+      html = html.replace(/\s*<script id="embeddedDashboardData"[^>]*>[\s\S]*?<\/script>/, "");
+
+      const payload = JSON.stringify(serializeRaw(RAW)).replace(/<\/script/gi, "<\\/script");
+      const inject = '\n<script id="embeddedDashboardData" type="application/json">' + payload + "<\/script>\n</body>";
+      if(!/<\/body>/i.test(html)) throw new Error("Unexpected page structure — couldn't find </body> to inject into.");
+      html = html.replace(/<\/body>/i, inject);
+
+      const blob = new Blob([html], {type:"text/html;charset=utf-8;"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "redial-dashboard.html"; // fixed name so re-uploading overwrites the same hosted page
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }catch(err){
+      console.error(err);
+      const hint = location.protocol === "file:"
+        ? " This tool needs to be hosted at a URL (not opened as a local file) before it can publish itself — that's a one-time setup step."
+        : "";
+      showError("Couldn't build the published page: " + (err && err.message ? err.message : err) + "." + hint);
+    }finally{
+      publishBtn.disabled = false;
+      publishBtn.textContent = origLabel;
+    }
+  }
+
+  // If this page was generated by Publish, it carries its data baked in — load it immediately.
+  function loadEmbeddedDataIfPresent(){
+    const el = document.getElementById("embeddedDashboardData");
+    if(!el) return;
+    try{
+      const obj = JSON.parse(el.textContent);
+      RAW = deserializeRaw(obj);
+      selectedStatuses = new Set(RAW.statuses);
+      selectedCampaigns = new Set(RAW.campaigns);
+      selectedAttemptBuckets = new Set(RAW.attemptBuckets);
+      renderShell();
+      render();
+      activateDashboardUI(RAW.fileName, RAW.totalRows, RAW.lists.length, RAW.dateCols);
+      if(RAW.publishedAt){
+        const brand = $("brandSub");
+        brand.textContent = brand.textContent + " · updated " + new Date(RAW.publishedAt).toLocaleString();
+      }
+    }catch(err){
+      console.error("Failed to load embedded dashboard data", err);
+    }
+  }
+
+  // ---------- CSV streaming parser (memory-light path for very large exports) ----------
+  function parseCsvLine(line){
+    const fields = [];
+    let cur = "";
+    let inQuotes = false;
+    for(let i=0;i<line.length;i++){
+      const ch = line[i];
+      if(inQuotes){
+        if(ch === '"'){
+          if(line[i+1] === '"'){ cur += '"'; i++; }
+          else { inQuotes = false; }
+        } else {
+          cur += ch;
+        }
+      } else {
+        if(ch === '"'){ inQuotes = true; }
+        else if(ch === ","){ fields.push(cur); cur = ""; }
+        else { cur += ch; }
+      }
+    }
+    fields.push(cur);
+    return fields.map(f => f.replace(/\r$/, ""));
+  }
+
+  function countQuotes(s){
+    let n = 0;
+    for(let i=0;i<s.length;i++) if(s[i] === '"') n++;
+    return n;
+  }
+
+  async function parseCsvStreaming(file){
+    const ctx = newAggContext();
+    const reader = file.stream().getReader();
+    const decoder = new TextDecoder("utf-8");
+
+    let buffer = "";
+    let pendingLine = null; // holds a line with an unbalanced quote, waiting for its continuation
+    let header = null;
+    let idx = null;
+    let bytesRead = 0;
+    let lastUiUpdate = 0;
+    const totalBytes = file.size || 0;
+
+    function processLine(line){
+      if(pendingLine !== null){
+        line = pendingLine + "\n" + line;
+        pendingLine = null;
+      }
+      if(countQuotes(line) % 2 !== 0){
+        pendingLine = line;
+        return;
+      }
+      if(line === "") return;
+
+      if(header === null){
+        const fields = parseCsvLine(line);
+        header = fields.map(normHeader);
+        const iList = colIndex(header, "list name");
+        const iStatus = colIndex(header, "status");
+        const iCampaign = colIndex(header, "campaign");
+        const iConsider = colIndex(header, "consideration time (date)", "consideration time");
+        const iCount = colIndex(header, "count");
+        const iAttempts = colIndex(header, "dial attempts", "numberofattempts", "number of attempts", "attempts");
+        if(iList === -1 || iConsider === -1){
+          throw new Error("Missing required columns (LIST NAME / CONSIDERATION TIME (DATE)) — make sure this is a Five9 'List Details' export.");
+        }
+        idx = {iList, iStatus, iCampaign, iConsider, iCount, iAttempts};
+        return;
+      }
+
+      const fields = parseCsvLine(line);
+      aggregateRow(fields, idx, ctx);
+    }
+
+    while(true){
+      const { done, value } = await reader.read();
+      if(done) break;
+      bytesRead += value.byteLength;
+      buffer += decoder.decode(value, {stream:true});
+
+      let nl;
+      while((nl = buffer.indexOf("\n")) !== -1){
+        const line = buffer.slice(0, nl);
+        buffer = buffer.slice(nl+1);
+        processLine(line);
+      }
+
+      const now = performance.now();
+      if(now - lastUiUpdate > 120){
+        lastUiUpdate = now;
+        const pct = totalBytes ? Math.min(100, Math.round((bytesRead/totalBytes)*100)) : null;
+        setLoading(true, ctx.totalRows.toLocaleString() + " records read" + (pct!=null ? " (" + pct + "%)" : "") + "…");
+        await new Promise(r=>setTimeout(r,0)); // yield so the UI actually repaints
+      }
+    }
+    buffer += decoder.decode();
+    if(buffer.length) processLine(buffer);
+    if(pendingLine !== null) processLine(pendingLine);
+
+    if(header === null || idx === null){
+      throw new Error("This CSV appears to be empty.");
+    }
+
+    setLoading(true, "Finalizing…");
+    await new Promise(r=>setTimeout(r,20));
+    finalizeAggregation(ctx, file.name);
+  }
+
+  function parseWorkbook(fileData, fileName, readType){
+    setLoading(true, "Parsing spreadsheet…");
+    const wb = XLSX.read(fileData, {type: readType || "array", cellDates:true, cellStyles:false, cellNF:false});
+    const found = findDataSheet(wb);
+    if(!found){
+      setLoading(false);
+      showError("Couldn't find a sheet with LIST NAME and CONSIDERATION TIME columns. Make sure you uploaded a Five9 'List Details' export.");
+      return;
+    }
+    setLoading(true, "Reading " + found.rowCount.toLocaleString() + " records…");
+
+    setTimeout(()=>{
+      try{
+        const rows = XLSX.utils.sheet_to_json(found.ws, {header:1, defval:null, raw:true});
+        const header = rows[0].map(normHeader);
+        const iList = colIndex(header, "list name");
+        const iStatus = colIndex(header, "status");
+        const iCampaign = colIndex(header, "campaign");
+        const iConsider = colIndex(header, "consideration time (date)", "consideration time");
+        const iCount = colIndex(header, "count");
+        const iAttempts = colIndex(header, "dial attempts", "numberofattempts", "number of attempts", "attempts");
+
+        if(iList === -1 || iConsider === -1){
+          setLoading(false);
+          showError("Missing required columns (LIST NAME / CONSIDERATION TIME (DATE)) in the detected sheet.");
+          return;
+        }
+
+        const idx = {iList, iStatus, iCampaign, iConsider, iCount, iAttempts};
+        runAggregationChunked(rows, idx, fileName).catch(err=>{
+          console.error(err);
+          setLoading(false);
+          showError("Aggregation failed: " + (err && err.message ? err.message : err));
+        });
+      }catch(err){
+        console.error(err);
+        setLoading(false);
+        showError("Couldn't read rows from that sheet: " + (err && err.message ? err.message : err));
+      }
+    }, 20);
+  }
+
+  // Aggregates an in-memory rows array in chunks, yielding to the browser between
+  // chunks so the tab stays responsive and the loading message keeps updating
+  // instead of appearing frozen on very large files.
+  async function runAggregationChunked(rows, idx, fileName){
+    const ctx = newAggContext();
+    const CHUNK = 20000;
+    const total = rows.length - 1;
+
+    for(let start = 1; start < rows.length; start += CHUNK){
+      const end = Math.min(rows.length, start + CHUNK);
+      for(let r = start; r < end; r++){
+        const row = rows[r];
+        if(!row) continue;
+        aggregateRow(row, idx, ctx);
+      }
+      const pct = total > 0 ? Math.min(100, Math.round(((end-1)/total)*100)) : 100;
+      setLoading(true, "Aggregating… " + ctx.totalRows.toLocaleString() + " records (" + pct + "%)");
+      await new Promise(res=>setTimeout(res,0));
+    }
+
+    setLoading(true, "Finalizing…");
+    await new Promise(res=>setTimeout(res,20));
+    finalizeAggregation(ctx, fileName);
+  }
+
+  // ---------- Filter panel render (built once per file) ----------
+  function renderShell(){
+    const statusWrap = $("statusFilters");
+    statusWrap.innerHTML = "";
+    RAW.statuses.forEach(st=>{
+      const row = document.createElement("label");
+      row.className = "check-row";
+      row.innerHTML = '<input type="checkbox" checked data-status="' + escapeAttr(st) + '"> <span>' + escapeHtml(st) + "</span>";
+      row.querySelector("input").addEventListener("change", (e)=>{
+        if(e.target.checked) selectedStatuses.add(st); else selectedStatuses.delete(st);
+        render();
+      });
+      statusWrap.appendChild(row);
+    });
+    $("statusAll").onclick = ()=>{
+      selectedStatuses = new Set(RAW.statuses);
+      statusWrap.querySelectorAll("input").forEach(i=>i.checked = true);
+      render();
+    };
+    $("statusNone").onclick = ()=>{
+      selectedStatuses = new Set();
+      statusWrap.querySelectorAll("input").forEach(i=>i.checked = false);
+      render();
+    };
+
+    if(RAW.campaigns.length > 1){
+      $("campaignSection").style.display = "block";
+      $("campaignNote").style.display = "none";
+      const cWrap = $("campaignFilters");
+      cWrap.innerHTML = "";
+      RAW.campaigns.forEach(c=>{
+        const row = document.createElement("label");
+        row.className = "check-row";
+        row.innerHTML = '<input type="checkbox" checked data-campaign="' + escapeAttr(c) + '"> <span>' + escapeHtml(c) + "</span>";
+        row.querySelector("input").addEventListener("change", (e)=>{
+          if(e.target.checked) selectedCampaigns.add(c); else selectedCampaigns.delete(c);
+          render();
+        });
+        cWrap.appendChild(row);
+      });
+    } else {
+      $("campaignSection").style.display = "none";
+      if(RAW.campaigns.length === 1){
+        $("campaignNote").style.display = "block";
+        $("campaignNote").textContent = "Campaign: " + RAW.campaigns[0];
+      }
+    }
+
+    if(RAW.hasAttemptsData && RAW.attemptBuckets.length > 0){
+      $("attemptsSection").style.display = "block";
+      const aWrap = $("attemptsFilters");
+      aWrap.innerHTML = "";
+      RAW.attemptBuckets.forEach(b=>{
+        const row = document.createElement("label");
+        row.className = "check-row";
+        const label = b === "5+" ? "5+ attempts" : (b + (b === "1" ? " attempt" : " attempts"));
+        row.innerHTML = '<input type="checkbox" checked data-attempts="' + escapeAttr(b) + '"> <span>' + escapeHtml(label) + "</span>";
+        row.querySelector("input").addEventListener("change", (e)=>{
+          if(e.target.checked) selectedAttemptBuckets.add(b); else selectedAttemptBuckets.delete(b);
+          render();
+        });
+        aWrap.appendChild(row);
+      });
+      $("attemptsAll").onclick = ()=>{
+        selectedAttemptBuckets = new Set(RAW.attemptBuckets);
+        aWrap.querySelectorAll("input").forEach(i=>i.checked = true);
+        render();
+      };
+      $("attemptsNone").onclick = ()=>{
+        selectedAttemptBuckets = new Set();
+        aWrap.querySelectorAll("input").forEach(i=>i.checked = false);
+        render();
+      };
+    } else {
+      $("attemptsSection").style.display = "none";
+    }
+
+    $("searchInput").value = "";
+    $("searchInput").oninput = (e)=>{ searchTerm = e.target.value.toLowerCase(); render(); };
+
+    exportBtn.onclick = exportCsv;
+    snapshotBtn.onclick = exportSnapshot;
+    publishBtn.onclick = publishDashboard;
+
+    // sortable headers get wired in renderTableHead each render since columns are dynamic
+  }
+
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+  function escapeAttr(s){ return escapeHtml(s); }
+
+  // ---------- Compute filtered pivot ----------
+  function computePivot(){
+    const cols = RAW.dateCols;
+    const colKeys = ["now", ...cols.map(c=>c.key)];
+    const rowsOut = [];
+
+    for(const list of RAW.lists){
+      const listMap = RAW.agg.get(list);
+      if(!listMap) continue;
+      const values = {};
+      let total = 0;
+      let attemptsSum = 0;
+      colKeys.forEach(k=>{
+        const statusMap = listMap.get(k);
+        let v = 0;
+        if(statusMap){
+          for(const [ck, cell] of statusMap.entries()){
+            const parts = ck.split("\u0001");
+            const st = parts[0], camp = parts[1], attB = parts[2];
+            if(!selectedStatuses.has(st)) continue;
+            if(camp !== "" && !selectedCampaigns.has(camp)) continue;
+            if(!selectedAttemptBuckets.has(attB)) continue;
+            v += cell.count;
+            attemptsSum += cell.attemptsSum;
+          }
+        }
+        values[k] = v;
+        total += v;
+      });
+      if(total === 0) continue;
+      // next redial = first future col (in order) with value > 0
+      let nextCol = null;
+      for(const c of cols){
+        if(values[c.key] > 0){ nextCol = c; break; }
+      }
+      const avgAttempts = total > 0 ? attemptsSum / total : 0;
+      rowsOut.push({ list, values, total, nowVal: values.now, nextCol, avgAttempts, attemptsSum });
+    }
+    return { colKeys, cols, rows: rowsOut };
+  }
+
+  // ---------- Render ----------
+  function render(){
+    if(!RAW) return;
+    const { colKeys, cols, rows } = computePivot();
+
+    // filter by campaign (only if raw row had campaign info tracked at agg level — we didn't split by campaign
+    // in the agg map to keep it light; when multiple campaigns exist we re-derive by re-scanning is out of scope
+    // for v1, so campaign filter is informational unless single-campaign file). Campaign filtering intentionally
+    // left as future enhancement notice below when >1 campaign present.
+
+    let filteredRows = rows.filter(r => r.list.toLowerCase().indexOf(searchTerm) !== -1);
+
+    // sort
+    filteredRows.sort((a,b)=>{
+      let av, bv;
+      if(sortKey === "list"){ av = a.list.toLowerCase(); bv = b.list.toLowerCase(); }
+      else if(sortKey === "now"){ av = a.nowVal; bv = b.nowVal; }
+      else if(sortKey === "next"){ av = a.nextCol ? a.nextCol.sortDate.getTime() : Infinity; bv = b.nextCol ? b.nextCol.sortDate.getTime() : Infinity; }
+      else if(sortKey === "total"){ av = a.total; bv = b.total; }
+      else if(sortKey === "avgAttempts"){ av = a.avgAttempts; bv = b.avgAttempts; }
+      else { av = a.values[sortKey] || 0; bv = b.values[sortKey] || 0; }
+      if(av < bv) return sortDir === "asc" ? -1 : 1;
+      if(av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    renderTableHead(cols);
+    renderTableBody(filteredRows, colKeys, cols);
+    renderSummary(filteredRows, cols);
+  }
+
+  function sortIndicator(key){
+    if(sortKey !== key) return "";
+    return sortDir === "asc" ? " ↑" : " ↓";
+  }
+
+  function renderTableHead(cols){
+    const head = $("pivotHeadRow");
+    head.innerHTML = "";
+    const showAttempts = RAW.hasAttemptsData;
+    const thList = document.createElement("th");
+    thList.className = "col-list" + (sortKey==="list" ? " sorted" : "");
+    thList.textContent = "List" + sortIndicator("list");
+    thList.onclick = ()=> toggleSort("list", "asc");
+    head.appendChild(thList);
+
+    const thTotal = document.createElement("th");
+    thTotal.className = "col-total" + (sortKey==="total" ? " sorted" : "");
+    thTotal.textContent = "Total" + sortIndicator("total");
+    thTotal.onclick = ()=> toggleSort("total", "desc");
+    head.appendChild(thTotal);
+
+    if(showAttempts){
+      const thAvg = document.createElement("th");
+      thAvg.className = sortKey==="avgAttempts" ? "sorted" : "";
+      thAvg.textContent = "Avg Attempts" + sortIndicator("avgAttempts");
+      thAvg.title = "Average dial attempts per record, weighted by count, under the current filters";
+      thAvg.onclick = ()=> toggleSort("avgAttempts", "desc");
+      head.appendChild(thAvg);
+    }
+
+    const thNext = document.createElement("th");
+    thNext.className = sortKey==="next" ? "sorted" : "";
+    thNext.textContent = "Next Redial" + sortIndicator("next");
+    thNext.onclick = ()=> toggleSort("next", "asc");
+    head.appendChild(thNext);
+
+    const thNow = document.createElement("th");
+    thNow.className = "col-now" + (sortKey==="now" ? " sorted" : "");
+    thNow.textContent = "Now" + sortIndicator("now");
+    thNow.onclick = ()=> toggleSort("now", "desc");
+    head.appendChild(thNow);
+
+    cols.forEach(c=>{
+      const th = document.createElement("th");
+      th.className = sortKey===c.key ? "sorted" : "";
+      th.textContent = c.label + sortIndicator(c.key);
+      th.title = c.tooltip;
+      th.onclick = ()=> toggleSort(c.key, "desc");
+      head.appendChild(th);
+    });
+  }
+
+  function toggleSort(key, defaultDir){
+    if(sortKey === key){
+      sortDir = sortDir === "asc" ? "desc" : "asc";
+    } else {
+      sortKey = key;
+      sortDir = defaultDir;
+    }
+    render();
+  }
+
+  function renderTableBody(rows, colKeys, cols){
+    const body = $("pivotBody");
+    body.innerHTML = "";
+    const showAttempts = RAW.hasAttemptsData;
+    const extraCols = showAttempts ? 1 : 0;
+
+    if(rows.length === 0){
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 4 + extraCols + cols.length;
+      td.className = "empty-state";
+      td.textContent = "No records match the current filters.";
+      tr.appendChild(td);
+      body.appendChild(tr);
+      renderFoot([], colKeys, cols);
+      return;
+    }
+
+    rows.forEach(r=>{
+      const rowMax = Math.max(1, ...colKeys.map(k=>r.values[k]||0));
+      const tr = document.createElement("tr");
+
+      const tdList = document.createElement("td");
+      tdList.className = "col-list";
+      tdList.textContent = r.list;
+      tr.appendChild(tdList);
+
+      const tdTotal = document.createElement("td");
+      tdTotal.className = "col-total";
+      tdTotal.textContent = r.total.toLocaleString();
+      tr.appendChild(tdTotal);
+
+      if(showAttempts){
+        const tdAvg = document.createElement("td");
+        tdAvg.className = "col-next";
+        tdAvg.textContent = r.avgAttempts.toFixed(1);
+        if(r.avgAttempts >= 4) tdAvg.style.color = "var(--red)";
+        else if(r.avgAttempts >= 2) tdAvg.style.color = "var(--amber)";
+        else tdAvg.style.color = "var(--text-secondary)";
+        tr.appendChild(tdAvg);
+      }
+
+      const tdNext = document.createElement("td");
+      tdNext.className = "col-next";
+      if(r.nextCol){
+        tdNext.textContent = r.nextCol.label;
+        tdNext.title = r.nextCol.tooltip;
+        tdNext.style.color = "var(--amber)";
+      } else if(r.nowVal > 0){
+        tdNext.textContent = "Now";
+        tdNext.style.color = "var(--teal)";
+      } else {
+        tdNext.textContent = "—";
+        tdNext.style.color = "var(--text-dim)";
+      }
+      tr.appendChild(tdNext);
+
+      const tdNow = document.createElement("td");
+      tdNow.className = "col-now cell" + (r.nowVal>0 ? " hasval" : "");
+      tdNow.textContent = r.nowVal ? r.nowVal.toLocaleString() : "–";
+      if(r.nowVal>0){
+        const bar = document.createElement("div");
+        bar.className = "bar";
+        bar.style.opacity = Math.min(1, 0.25 + 0.75*(r.nowVal/rowMax));
+        tdNow.appendChild(bar);
+      }
+      tr.appendChild(tdNow);
+
+      cols.forEach(c=>{
+        const v = r.values[c.key] || 0;
+        const td = document.createElement("td");
+        td.className = "cell" + (v>0 ? " hasval" : "");
+        td.textContent = v ? v.toLocaleString() : "–";
+        if(v>0){
+          const bar = document.createElement("div");
+          bar.className = "bar";
+          bar.style.opacity = Math.min(1, 0.25 + 0.75*(v/rowMax));
+          td.appendChild(bar);
+        }
+        tr.appendChild(td);
+      });
+
+      body.appendChild(tr);
+    });
+
+    renderFoot(rows, colKeys, cols);
+  }
+
+  function renderFoot(rows, colKeys, cols){
+    const foot = $("pivotFoot");
+    foot.innerHTML = "";
+    const tr = document.createElement("tr");
+    tr.className = "total-row";
+
+    const tdLabel = document.createElement("td");
+    tdLabel.className = "col-list";
+    tdLabel.textContent = "Grand Total";
+    tr.appendChild(tdLabel);
+
+    const grandTotal = rows.reduce((s,r)=>s+r.total,0);
+    const tdTotal = document.createElement("td");
+    tdTotal.className = "col-total";
+    tdTotal.textContent = grandTotal.toLocaleString();
+    tr.appendChild(tdTotal);
+
+    if(RAW.hasAttemptsData){
+      const attemptsSum = rows.reduce((s,r)=>s+r.attemptsSum,0);
+      const tdAvg = document.createElement("td");
+      tdAvg.textContent = grandTotal > 0 ? (attemptsSum/grandTotal).toFixed(1) : "0.0";
+      tr.appendChild(tdAvg);
+    }
+
+    tr.appendChild(document.createElement("td")); // next col spacer
+
+    const nowTotal = rows.reduce((s,r)=>s+r.nowVal,0);
+    const tdNow = document.createElement("td");
+    tdNow.className = "col-now";
+    tdNow.textContent = nowTotal.toLocaleString();
+    tr.appendChild(tdNow);
+
+    cols.forEach(c=>{
+      const sum = rows.reduce((s,r)=>s + (r.values[c.key]||0), 0);
+      const td = document.createElement("td");
+      td.textContent = sum.toLocaleString();
+      tr.appendChild(td);
+    });
+
+    foot.appendChild(tr);
+  }
+
+  function renderSummary(rows, cols){
+    const total = rows.reduce((s,r)=>s+r.total,0);
+    const now = rows.reduce((s,r)=>s+r.nowVal,0);
+    $("cardTotal").textContent = total.toLocaleString();
+    $("cardNow").textContent = now.toLocaleString();
+    $("cardLists").textContent = rows.length;
+    $("cardListsFoot").textContent = "of " + RAW.lists.length + " lists in file";
+
+    if(RAW.hasAttemptsData){
+      $("cardAttemptsWrap").style.display = "block";
+      const attemptsSum = rows.reduce((s,r)=>s+r.attemptsSum,0);
+      $("cardAttempts").textContent = total > 0 ? (attemptsSum/total).toFixed(1) : "0.0";
+    } else {
+      $("cardAttemptsWrap").style.display = "none";
+    }
+
+    let soonest = null;
+    rows.forEach(r=>{
+      if(r.nextCol && (!soonest || r.nextCol.sortDate < soonest.sortDate)) soonest = r.nextCol;
+    });
+    if(soonest){
+      $("cardNext").textContent = soonest.label;
+      $("cardNextFoot").textContent = soonest.tooltip;
+    } else if(now > 0){
+      $("cardNext").textContent = "Now";
+      $("cardNextFoot").textContent = "records already available";
+    } else {
+      $("cardNext").textContent = "—";
+      $("cardNextFoot").textContent = "no records match filters";
+    }
+  }
+
+  // ---------- Export ----------
+  function exportCsv(){
+    if(!RAW) return;
+    const { colKeys, cols, rows } = computePivot();
+    let filtered = rows.filter(r => r.list.toLowerCase().indexOf(searchTerm) !== -1);
+    filtered.sort((a,b)=>{
+      let av, bv;
+      if(sortKey === "list"){ av = a.list.toLowerCase(); bv = b.list.toLowerCase(); }
+      else if(sortKey === "now"){ av = a.nowVal; bv = b.nowVal; }
+      else if(sortKey === "next"){ av = a.nextCol ? a.nextCol.sortDate.getTime() : Infinity; bv = b.nextCol ? b.nextCol.sortDate.getTime() : Infinity; }
+      else if(sortKey === "total"){ av = a.total; bv = b.total; }
+      else if(sortKey === "avgAttempts"){ av = a.avgAttempts; bv = b.avgAttempts; }
+      else { av = a.values[sortKey] || 0; bv = b.values[sortKey] || 0; }
+      if(av < bv) return sortDir === "asc" ? -1 : 1;
+      if(av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    const showAttempts = RAW.hasAttemptsData;
+    const headers = ["List","Total", ...(showAttempts ? ["Avg Attempts"] : []), "Next Redial","Now", ...cols.map(c=>c.label)];
+    const lines = [headers.join(",")];
+    filtered.forEach(r=>{
+      const nextLabel = r.nextCol ? r.nextCol.label : (r.nowVal>0 ? "Now" : "");
+      const vals = [csvSafe(r.list), r.total, ...(showAttempts ? [r.avgAttempts.toFixed(1)] : []), csvSafe(nextLabel), r.nowVal, ...cols.map(c=>r.values[c.key]||0)];
+      lines.push(vals.join(","));
+    });
+    const blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8;"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "redial-dashboard-export.csv";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  function csvSafe(s){
+    s = String(s);
+    if(s.indexOf(",")!==-1 || s.indexOf('"')!==-1) return '"' + s.replace(/"/g,'""') + '"';
+    return s;
+  }
+
+  // ---------- Snapshot export (management-friendly PNG of the current view) ----------
+  async function exportSnapshot(){
+    if(!RAW) return;
+    if(typeof html2canvas === "undefined"){
+      showError("Couldn't load the snapshot library (html2canvas). Check your network connection or ad-blocker and try again.");
+      return;
+    }
+
+    const origLabel = snapshotBtn.textContent;
+    snapshotBtn.disabled = true;
+    snapshotBtn.textContent = "Capturing…";
+
+    let stage = null;
+    try{
+      const summarySrc = document.querySelector(".summary-row");
+      const tableScrollSrc = document.querySelector(".table-scroll");
+      if(!summarySrc || !tableScrollSrc) throw new Error("Couldn't find the dashboard content to capture.");
+
+      // Render a full, unclipped copy off-screen so the snapshot includes every row/column
+      // regardless of current scroll position — without disturbing the live page.
+      stage = document.createElement("div");
+      stage.style.position = "fixed";
+      stage.style.left = "-99999px";
+      stage.style.top = "0";
+      stage.style.width = "max-content";
+      stage.style.background = "#0A0E12";
+      stage.style.padding = "28px";
+      stage.style.fontFamily = getComputedStyle(document.body).fontFamily;
+
+      const now = new Date();
+      const filterParts = [];
+      filterParts.push("Status: " + (selectedStatuses.size === RAW.statuses.length ? "All" : selectedStatuses.size + "/" + RAW.statuses.length));
+      if(RAW.campaigns.length > 1){
+        filterParts.push("Campaign: " + (selectedCampaigns.size === RAW.campaigns.length ? "All" : selectedCampaigns.size + "/" + RAW.campaigns.length));
+      }
+      if(RAW.hasAttemptsData){
+        filterParts.push("Attempts: " + (selectedAttemptBuckets.size === RAW.attemptBuckets.length ? "All" : selectedAttemptBuckets.size + "/" + RAW.attemptBuckets.length));
+      }
+
+      const header = document.createElement("div");
+      header.style.marginBottom = "18px";
+      header.style.color = "#E9EEF1";
+      header.innerHTML =
+        '<div style="font-size:18px;font-weight:700;">List Inventory &amp; Redial Dashboard</div>' +
+        '<div style="font-size:12px;color:#8CA0AB;margin-top:4px;font-family:\'IBM Plex Mono\',monospace;">' +
+          escapeHtml(RAW.fileName) + " · " + RAW.totalRows.toLocaleString() + " records · generated " + now.toLocaleString() +
+        "</div>" +
+        '<div style="font-size:12px;color:#8CA0AB;margin-top:2px;font-family:\'IBM Plex Mono\',monospace;">' +
+          "Filters — " + filterParts.join(" · ") +
+        "</div>";
+      stage.appendChild(header);
+
+      const summaryClone = summarySrc.cloneNode(true);
+      summaryClone.style.marginBottom = "16px";
+      stage.appendChild(summaryClone);
+
+      const tableWrap = document.createElement("div");
+      tableWrap.style.background = "var(--bg-panel)";
+      tableWrap.style.border = "1px solid var(--border)";
+      tableWrap.style.borderRadius = "11px";
+      tableWrap.style.overflow = "visible";
+      tableWrap.style.display = "inline-block";
+
+      const tableClone = tableScrollSrc.cloneNode(true);
+      tableClone.style.maxHeight = "none";
+      tableClone.style.overflow = "visible";
+      tableClone.style.width = "max-content";
+      // Sticky positioning has no meaning (and sometimes renders oddly in html2canvas)
+      // once the container is fully unclipped for capture — force it static.
+      tableClone.querySelectorAll("th, td.col-list").forEach(el=>{ el.style.position = "static"; });
+      tableWrap.appendChild(tableClone);
+      stage.appendChild(tableWrap);
+
+      document.body.appendChild(stage);
+
+      // Give the browser a couple of frames to lay out the cloned content before capturing.
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+
+      const canvas = await html2canvas(stage, {
+        backgroundColor: "#0A0E12",
+        scale: Math.min(2, window.devicePixelRatio || 1),
+        useCORS: true
+      });
+
+      const dataUrl = canvas.toDataURL("image/png");
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = "redial-dashboard-snapshot-" + now.toISOString().slice(0,10) + ".png";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }catch(err){
+      console.error(err);
+      showError("Couldn't create the snapshot: " + (err && err.message ? err.message : err));
+    }finally{
+      if(stage && stage.parentNode) stage.parentNode.removeChild(stage);
+      snapshotBtn.disabled = false;
+      snapshotBtn.textContent = origLabel;
+    }
+  }
+
+})();
+</script>
+</body>
+</html>
